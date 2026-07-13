@@ -1,0 +1,1079 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AD Hardening Auto-Report Generator — CtrlA Technologies</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@600;700;800&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+<!-- Export libraries (loaded from CDN; an internet connection is required when this file is opened) -->
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/file-saver@2.0.5/dist/FileSaver.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@8.5.0/build/index.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf-autotable@3.8.2/dist/jspdf.plugin.autotable.min.js"></script>
+
+<style>
+  :root{
+    --bg: #120E1F;
+    --bg-grid: #171029;
+    --surface: #1D1633;
+    --surface-2: #251C3F;
+    --border: #382C5C;
+    --border-soft: #2A2246;
+    --purple: #7C3AED;
+    --purple-deep: #5B21B6;
+    --gold: #D4AF37;
+    --gold-soft: #E8CE6F;
+    --text: #F3EFFB;
+    --text-muted: #A79BC4;
+    --text-faint: #6E6390;
+    --pass: #34D399;
+    --pass-bg: rgba(52,211,153,0.14);
+    --fail: #FB7185;
+    --fail-bg: rgba(251,113,133,0.14);
+    --manual: #FBBF24;
+    --manual-bg: rgba(251,191,36,0.14);
+    --radius: 14px;
+    --font-display: 'Sora', sans-serif;
+    --font-body: 'Inter', sans-serif;
+    --font-mono: 'JetBrains Mono', monospace;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html,body{
+    margin:0; padding:0;
+    background:
+      radial-gradient(circle at 12% 0%, rgba(124,58,237,0.16), transparent 45%),
+      radial-gradient(circle at 100% 20%, rgba(212,175,55,0.08), transparent 40%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--font-body);
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  a { color: var(--gold-soft); }
+
+  .wrap{
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 28px 80px;
+  }
+
+  /* ---------- Header ---------- */
+  header.top{
+    padding: 34px 0 30px;
+    border-bottom: 1px solid var(--border-soft);
+    margin-bottom: 40px;
+    position: relative;
+  }
+  .brandrow{
+    display:flex; align-items:center; justify-content:space-between; gap:20px; flex-wrap:wrap;
+  }
+  .brand{
+    display:flex; align-items:center; gap:12px;
+  }
+  .brand-mark{
+    width:40px; height:40px; border-radius:10px;
+    background: linear-gradient(140deg, var(--purple), var(--purple-deep));
+    display:flex; align-items:center; justify-content:center;
+    font-family: var(--font-display); font-weight:800; font-size:17px; color:var(--gold-soft);
+    box-shadow: 0 0 0 1px rgba(212,175,55,0.35), 0 8px 24px rgba(124,58,237,0.35);
+    flex-shrink:0;
+  }
+  .brand-name{
+    font-family: var(--font-display); font-weight:700; font-size:15px; letter-spacing:0.02em;
+  }
+  .brand-sub{
+    font-size:12px; color: var(--text-faint); letter-spacing:0.03em; margin-top:1px;
+  }
+  .eyebrow{
+    font-family: var(--font-mono); font-size:11.5px; letter-spacing:0.14em; text-transform:uppercase;
+    color: var(--gold-soft); margin-bottom:10px; display:flex; align-items:center; gap:10px;
+  }
+  .eyebrow::before{
+    content:''; width:22px; height:1px; background: var(--gold-soft); opacity:0.6;
+  }
+  h1.hero-title{
+    font-family: var(--font-display); font-weight:800; font-size: clamp(28px, 4vw, 40px);
+    line-height:1.12; margin: 8px 0 10px; letter-spacing:-0.01em;
+  }
+  p.hero-desc{
+    color: var(--text-muted); font-size:15px; line-height:1.6; max-width: 640px; margin:0;
+  }
+
+  /* signature shield gauge */
+  .shield-wrap{ position:relative; width:118px; height:132px; flex-shrink:0; }
+  .shield-wrap svg{ width:100%; height:100%; display:block; }
+  .shield-pct{
+    position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+    font-family: var(--font-display); pointer-events:none;
+  }
+  .shield-pct .num{ font-size:22px; font-weight:800; line-height:1; }
+  .shield-pct .lbl{ font-size:8.5px; letter-spacing:0.12em; color: var(--text-muted); margin-top:3px; text-transform:uppercase; }
+
+  /* ---------- Steps / Panels ---------- */
+  .panel{
+    background: linear-gradient(180deg, var(--surface), var(--surface-2));
+    border:1px solid var(--border-soft);
+    border-radius: var(--radius);
+    padding: 26px 28px;
+    margin-bottom: 22px;
+    position: relative;
+  }
+  .panel::before{
+    content:''; position:absolute; left:0; top:20px; bottom:20px; width:3px; border-radius:3px;
+    background: linear-gradient(180deg, var(--purple), var(--gold));
+    opacity:0.55;
+  }
+  .panel-head{ display:flex; align-items:center; gap:12px; margin-bottom:18px; }
+  .step-num{
+    font-family: var(--font-display); font-weight:800; font-size:13px;
+    width:30px; height:30px; border-radius:9px; display:flex; align-items:center; justify-content:center;
+    background: var(--surface-2); border:1px solid var(--border); color: var(--gold-soft); flex-shrink:0;
+  }
+  .panel-title{ font-family: var(--font-display); font-weight:700; font-size:17px; }
+  .panel-desc{ color: var(--text-muted); font-size:13.5px; margin: 2px 0 0 42px; }
+
+  .field-grid{
+    display:grid; grid-template-columns: repeat(4, 1fr); gap:16px;
+  }
+  @media (max-width:840px){ .field-grid{ grid-template-columns: repeat(2,1fr); } }
+
+  .field label{
+    display:block; font-size:11.5px; font-weight:600; color: var(--text-muted);
+    text-transform:uppercase; letter-spacing:0.06em; margin-bottom:7px;
+  }
+  .field input{
+    width:100%; background: rgba(0,0,0,0.22); border:1px solid var(--border);
+    border-radius:9px; padding:10px 12px; color: var(--text); font-family: var(--font-body);
+    font-size:14px; outline:none; transition: border-color .15s, box-shadow .15s;
+  }
+  .field input:focus{ border-color: var(--purple); box-shadow: 0 0 0 3px rgba(124,58,237,0.22); }
+  .field input::placeholder{ color: var(--text-faint); }
+
+  /* dropzone */
+  .dropzone{
+    margin-top: 6px;
+    border: 1.5px dashed var(--border);
+    border-radius: 12px;
+    padding: 34px 20px;
+    text-align:center;
+    cursor:pointer;
+    transition: border-color .15s, background .15s;
+    background: rgba(0,0,0,0.14);
+  }
+  .dropzone:hover, .dropzone.drag{
+    border-color: var(--gold);
+    background: rgba(212,175,55,0.06);
+  }
+  .dropzone svg{ width:34px; height:34px; margin-bottom:10px; opacity:0.85; }
+  .dropzone .dz-title{ font-weight:600; font-size:14.5px; }
+  .dropzone .dz-sub{ font-size:12.5px; color: var(--text-faint); margin-top:5px; }
+  .dropzone.has-file{ border-style:solid; border-color: var(--pass); background: var(--pass-bg); }
+  #fileInput{ display:none; }
+
+  .file-chip{
+    display:inline-flex; align-items:center; gap:8px; margin-top:14px;
+    background: rgba(0,0,0,0.25); border:1px solid var(--border); border-radius:8px;
+    padding:7px 12px; font-family: var(--font-mono); font-size:12.5px; color: var(--text-muted);
+  }
+
+  .btn{
+    font-family: var(--font-body); font-weight:600; font-size:13.5px; cursor:pointer;
+    border-radius:9px; padding:11px 20px; border:1px solid transparent; transition: transform .1s, filter .15s, box-shadow .15s;
+    display:inline-flex; align-items:center; gap:8px;
+  }
+  .btn:active{ transform: translateY(1px); }
+  .btn-primary{
+    background: linear-gradient(135deg, var(--purple), var(--purple-deep));
+    color:#fff; box-shadow: 0 6px 18px rgba(124,58,237,0.35);
+  }
+  .btn-primary:hover{ filter:brightness(1.08); }
+  .btn-primary:disabled{ opacity:0.4; cursor:not-allowed; filter:none; box-shadow:none; }
+  .btn-gold{
+    background: linear-gradient(135deg, var(--gold), #B8901E);
+    color:#241905; box-shadow: 0 6px 18px rgba(212,175,55,0.28);
+  }
+  .btn-gold:hover{ filter:brightness(1.06); }
+  .btn-ghost{
+    background: transparent; border-color: var(--border); color: var(--text-muted);
+  }
+  .btn-ghost:hover{ border-color: var(--purple); color: var(--text); }
+  .btn-sm{ padding:8px 14px; font-size:12.5px; }
+
+  .parse-row{ display:flex; align-items:center; gap:14px; margin-top:18px; flex-wrap:wrap; }
+  .status-msg{ font-size:13px; color: var(--text-muted); }
+  .status-msg.err{ color: var(--fail); }
+  .status-msg.ok{ color: var(--pass); }
+
+  /* ---------- Results ---------- */
+  #resultsSection{ display:none; }
+
+  .summary-row{
+    display:grid; grid-template-columns: 1.1fr repeat(4, 1fr); gap:14px; margin-bottom:22px;
+  }
+  @media (max-width:900px){ .summary-row{ grid-template-columns: repeat(2,1fr); } }
+  .stat-card{
+    background: var(--surface); border:1px solid var(--border-soft); border-radius:12px;
+    padding:16px 18px; display:flex; flex-direction:column; justify-content:center;
+  }
+  .stat-card .stat-num{ font-family: var(--font-display); font-weight:800; font-size:26px; }
+  .stat-card .stat-lbl{ font-size:11.5px; color: var(--text-muted); text-transform:uppercase; letter-spacing:0.06em; margin-top:3px; }
+  .stat-card.pass .stat-num{ color: var(--pass); }
+  .stat-card.fail .stat-num{ color: var(--fail); }
+  .stat-card.manual .stat-num{ color: var(--manual); }
+  .gauge-card{
+    display:flex; align-items:center; gap:16px; background: var(--surface); border:1px solid var(--border-soft);
+    border-radius:12px; padding:14px 16px;
+  }
+
+  .toolbar{
+    display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-bottom:14px;
+  }
+  .filter-pills{ display:flex; gap:8px; flex-wrap:wrap; }
+  .pill{
+    font-size:12.5px; font-weight:600; padding:7px 14px; border-radius:999px; cursor:pointer;
+    border:1px solid var(--border); color: var(--text-muted); background: rgba(0,0,0,0.15);
+    transition: all .15s;
+  }
+  .pill.active{ background: var(--purple); border-color: var(--purple); color:#fff; }
+  .search-box{
+    background: rgba(0,0,0,0.22); border:1px solid var(--border); border-radius:9px;
+    padding:8px 12px; color:var(--text); font-size:13px; width:220px; font-family:var(--font-body);
+  }
+  .export-row{ display:flex; gap:10px; flex-wrap:wrap; margin-bottom:18px; }
+
+  .table-scroll{
+    overflow-x:auto; border:1px solid var(--border-soft); border-radius:12px; background: var(--surface);
+  }
+  table.results{
+    width:100%; border-collapse:collapse; font-size:13px; min-width: 1080px;
+  }
+  table.results thead th{
+    background: var(--surface-2); text-align:left; padding:12px 14px; font-family: var(--font-display);
+    font-weight:700; font-size:11.5px; text-transform:uppercase; letter-spacing:0.05em; color: var(--gold-soft);
+    border-bottom:1px solid var(--border); position:sticky; top:0; white-space:nowrap;
+  }
+  table.results tbody td{
+    padding:10px 14px; border-bottom:1px solid var(--border-soft); vertical-align:top; color: var(--text);
+  }
+  table.results tbody tr:hover{ background: rgba(124,58,237,0.06); }
+  table.results td.mono{ font-family: var(--font-mono); font-size:12px; color: var(--text-muted); }
+  .grp-badge{
+    font-family: var(--font-mono); font-size:11px; color: var(--text-faint);
+  }
+  td[contenteditable="true"]{ outline:none; cursor:text; }
+  td[contenteditable="true"]:focus{ background: rgba(212,175,55,0.08); box-shadow: inset 0 0 0 1px var(--gold); }
+
+  select.compliance-select{
+    font-family: var(--font-body); font-weight:700; font-size:12px; border:none; border-radius:7px;
+    padding:6px 10px; cursor:pointer; outline:none; appearance:none; -webkit-appearance:none;
+    background-position: right 8px center; background-repeat:no-repeat; background-size:10px;
+  }
+  select.compliance-select.Pass{ background-color: var(--pass-bg); color: var(--pass); }
+  select.compliance-select.Fail{ background-color: var(--fail-bg); color: var(--fail); }
+  select.compliance-select.Manual-Review{ background-color: var(--manual-bg); color: var(--manual); }
+
+  footer.foot{
+    margin-top: 50px; padding-top:22px; border-top:1px solid var(--border-soft);
+    color: var(--text-faint); font-size:12px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:10px;
+  }
+
+  ::-webkit-scrollbar{ height:10px; width:10px; }
+  ::-webkit-scrollbar-thumb{ background: var(--border); border-radius:6px; }
+  ::-webkit-scrollbar-track{ background: transparent; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="top">
+    <div class="brandrow">
+      <div>
+        <div class="brand" style="margin-bottom:16px;">
+          <div class="brand-mark">A</div>
+          <div>
+            <div class="brand-name">CtrlA Technologies</div>
+            <div class="brand-sub">Security Operations &amp; Consulting</div>
+          </div>
+        </div>
+        <div class="eyebrow">Auto-Report Tool</div>
+        <h1 class="hero-title">AD Hardening<br>Auto-Report Generator</h1>
+        <p class="hero-desc">Upload a raw <span style="color:var(--gold-soft);">Get-GPOReport</span> HTML export. This tool reads every policy setting, checks it against a built-in hardening benchmark, and produces a signed-off Excel, Word, and PDF report — no manual retyping.</p>
+      </div>
+      <div class="shield-wrap" id="shieldWrap">
+        <svg viewBox="0 0 118 132">
+          <path d="M59 4 L110 20 V62 C110 96 88 118 59 128 C30 118 8 96 8 62 V20 Z"
+                fill="none" stroke="#382C5C" stroke-width="3"/>
+          <path id="shieldArc" d="M59 4 L110 20 V62 C110 96 88 118 59 128 C30 118 8 96 8 62 V20 Z"
+                fill="none" stroke="#34D399" stroke-width="3"
+                stroke-dasharray="0 1000" stroke-linecap="round"/>
+        </svg>
+        <div class="shield-pct">
+          <div class="num" id="shieldPctNum">—</div>
+          <div class="lbl">Compliant</div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- STEP 1: Metadata -->
+  <div class="panel">
+    <div class="panel-head">
+      <div class="step-num">01</div>
+      <div>
+        <div class="panel-title">Report details</div>
+      </div>
+    </div>
+    <div class="panel-desc" style="margin-bottom:16px;">These appear on the cover of every exported report.</div>
+    <div class="field-grid">
+      <div class="field">
+        <label for="clientName">Client name</label>
+        <input id="clientName" type="text" placeholder="e.g. Rukhmini Sahakari Bank Ltd." />
+      </div>
+      <div class="field">
+        <label for="reviewedBy">Reviewed by</label>
+        <input id="reviewedBy" type="text" placeholder="e.g. Sushant Pawar" />
+      </div>
+      <div class="field">
+        <label for="createdBy">Created by</label>
+        <input id="createdBy" type="text" placeholder="e.g. SOC Team, CtrlA Technologies" />
+      </div>
+      <div class="field">
+        <label for="reportDate">Date</label>
+        <input id="reportDate" type="date" />
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP 2: Upload -->
+  <div class="panel">
+    <div class="panel-head">
+      <div class="step-num">02</div>
+      <div>
+        <div class="panel-title">Upload GPO report</div>
+      </div>
+    </div>
+    <div class="panel-desc" style="margin-bottom:16px;">Only the raw HTML export from <span style="color:var(--gold-soft);">Get-GPOReport</span> is needed — everything else is filled automatically.</div>
+
+    <div class="dropzone" id="dropzone">
+      <svg viewBox="0 0 24 24" fill="none" stroke="#D4AF37" stroke-width="1.6" style="margin:0 auto;">
+        <path d="M12 3v12m0-12l-4 4m4-4l4 4M4 17v2a2 2 0 002 2h12a2 2 0 002-2v-2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div class="dz-title">Drop the GPO HTML file here, or click to browse</div>
+      <div class="dz-sub">.html / .htm — parsed entirely in your browser, nothing is uploaded anywhere</div>
+      <input type="file" id="fileInput" accept=".html,.htm" />
+    </div>
+    <div id="fileChipWrap"></div>
+
+    <div class="parse-row">
+      <button class="btn btn-primary" id="parseBtn" disabled>Parse &amp; generate report →</button>
+      <span class="status-msg" id="statusMsg"></span>
+    </div>
+  </div>
+
+  <!-- RESULTS -->
+  <div id="resultsSection">
+    <div class="panel" style="padding-top:22px;">
+      <div class="panel-head">
+        <div class="step-num">03</div>
+        <div><div class="panel-title">Review &amp; export</div></div>
+      </div>
+      <div class="panel-desc" style="margin-bottom:20px;">Every cell is editable — adjust Compliance, Remark, or Evidence before exporting.</div>
+
+      <div class="summary-row">
+        <div class="gauge-card">
+          <div>
+            <div style="font-family:var(--font-display); font-weight:700; font-size:14px;">Overall posture</div>
+            <div style="font-size:12px; color:var(--text-muted); margin-top:2px;" id="postureLine">—</div>
+          </div>
+        </div>
+        <div class="stat-card"><div class="stat-num" id="statTotal">0</div><div class="stat-lbl">Total checks</div></div>
+        <div class="stat-card pass"><div class="stat-num" id="statPass">0</div><div class="stat-lbl">Pass</div></div>
+        <div class="stat-card fail"><div class="stat-num" id="statFail">0</div><div class="stat-lbl">Fail</div></div>
+        <div class="stat-card manual"><div class="stat-num" id="statManual">0</div><div class="stat-lbl">Manual review</div></div>
+      </div>
+
+      <div class="toolbar">
+        <div class="filter-pills" id="filterPills">
+          <div class="pill active" data-filter="All">All</div>
+          <div class="pill" data-filter="Pass">Pass</div>
+          <div class="pill" data-filter="Fail">Fail</div>
+          <div class="pill" data-filter="Manual Review">Manual review</div>
+        </div>
+        <input class="search-box" id="searchBox" placeholder="Search policy or setting…" />
+      </div>
+
+      <div class="export-row">
+        <button class="btn btn-gold" id="exportExcelBtn">⬇ Export Excel</button>
+        <button class="btn btn-gold" id="exportWordBtn">⬇ Export Word</button>
+        <button class="btn btn-gold" id="exportPdfBtn">⬇ Export PDF</button>
+        <button class="btn btn-ghost btn-sm" id="resetBtn" style="margin-left:auto;">Start over</button>
+      </div>
+
+      <div class="table-scroll">
+        <table class="results" id="resultsTable">
+          <thead>
+            <tr>
+              <th>SR</th>
+              <th>Component</th>
+              <th>Policy name</th>
+              <th>Sub policy name</th>
+              <th>Settings</th>
+              <th>Compliance</th>
+              <th>Remark if failed</th>
+              <th>Evidence</th>
+            </tr>
+          </thead>
+          <tbody id="resultsBody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <footer class="foot">
+    <div>CtrlA Technologies and Consulting Services Pvt. Ltd. — internal SOC tooling</div>
+    <div>Runs fully client-side · no data leaves your browser</div>
+  </footer>
+
+</div>
+
+<script>
+/* ==========================================================================
+   AD Hardening Auto-Report Generator — client-side engine
+   ========================================================================== */
+
+(function(){
+"use strict";
+
+/* ---------------- Benchmark rule engine ---------------- */
+function parseNum(str){
+  const m = String(str).match(/-?\d+(\.\d+)?/);
+  return m ? parseFloat(m[0]) : null;
+}
+
+const RULES = [
+  { match:/enforce password history/i, type:'min', min:24,
+    fail:v=>`Expected \u2265 24 passwords remembered; found "${v}"` },
+  { match:/maximum password age/i, type:'maxNonZero', max:90,
+    fail:v=>`Expected \u2264 90 days (and not 0/never); found "${v}"` },
+  { match:/minimum password age/i, type:'min', min:1,
+    fail:v=>`Expected \u2265 1 day; found "${v}"` },
+  { match:/minimum password length audit/i, type:'min', min:14,
+    fail:v=>`Expected \u2265 14 characters; found "${v}"` },
+  { match:/minimum password length/i, type:'min', min:14,
+    fail:v=>`Expected \u2265 14 characters; found "${v}"` },
+  { match:/password must meet complexity/i, type:'equals', expected:['enabled'],
+    fail:v=>`Expected "Enabled"; found "${v}"` },
+  { match:/store passwords using reversible encryption/i, type:'equals', expected:['disabled'],
+    fail:v=>`Expected "Disabled"; found "${v}"` },
+  { match:/account lockout duration/i, type:'min', min:15,
+    fail:v=>`Expected \u2265 15 minutes; found "${v}"` },
+  { match:/account lockout threshold/i, type:'minNonZero', min:1, max:5,
+    fail:v=>`Expected between 1\u20135 invalid attempts (not 0); found "${v}"` },
+  { match:/reset account lockout counter/i, type:'min', min:15,
+    fail:v=>`Expected \u2265 15 minutes; found "${v}"` },
+  { match:/guest account status/i, type:'equals', expected:['disabled'],
+    fail:v=>`Expected "Disabled"; found "${v}"` },
+  { match:/ldap server signing requirements/i, type:'equals', expected:['require signing'],
+    fail:v=>`Expected "Require signing"; found "${v}"` },
+  { match:/digitally encrypt or sign secure channel data \(always\)/i, type:'equals', expected:['enabled'],
+    fail:v=>`Expected "Enabled"; found "${v}"` },
+  { match:/digitally sign communications \(always\)/i, type:'equals', expected:['enabled'],
+    fail:v=>`Expected "Enabled"; found "${v}"` },
+  { match:/allow anonymous sid\/name translation/i, type:'equals', expected:['disabled'],
+    fail:v=>`Expected "Disabled"; found "${v}"` },
+  { match:/do not store lan manager hash/i, type:'equals', expected:['enabled'],
+    fail:v=>`Expected "Enabled"; found "${v}"` },
+  { match:/maximum (application|security|system) log size/i, type:'min', min:32768,
+    fail:v=>`Expected \u2265 32768 KB; found "${v}"` },
+  { match:/enforce user logon restrictions/i, type:'equals', expected:['enabled'],
+    fail:v=>`Expected "Enabled"; found "${v}"` },
+];
+
+function evaluateRule(subPolicy, settingVal){
+  for (const rule of RULES){
+    if (rule.match.test(subPolicy)){
+      const num = parseNum(settingVal);
+      const lower = String(settingVal).toLowerCase();
+      if (rule.type === 'min'){
+        if (num !== null && num >= rule.min) return {status:'Pass', remark:'Ok'};
+        return {status:'Fail', remark:rule.fail(settingVal)};
+      }
+      if (rule.type === 'maxNonZero'){
+        if (num !== null && num > 0 && num <= rule.max) return {status:'Pass', remark:'Ok'};
+        return {status:'Fail', remark:rule.fail(settingVal)};
+      }
+      if (rule.type === 'minNonZero'){
+        if (num !== null && num >= rule.min && num <= (rule.max ?? Infinity)) return {status:'Pass', remark:'Ok'};
+        return {status:'Fail', remark:rule.fail(settingVal)};
+      }
+      if (rule.type === 'equals'){
+        if (rule.expected.includes(lower)) return {status:'Pass', remark:'Ok'};
+        return {status:'Fail', remark:rule.fail(settingVal)};
+      }
+    }
+  }
+  return {status:'Manual Review', remark:'Not in default benchmark \u2014 review manually'};
+}
+
+/* ---------------- GPO HTML parser ---------------- */
+const HEAD_RE = /^he(\d)(h)?(_expanded)?$/;
+
+function classifyHeader(ths){
+  const set = ths.map(t=>t.trim());
+  if (set.includes('Policy') && set.includes('Setting')) return 'policy_setting_winning';
+  if (set.includes('Option') && set.includes('Setting')) return 'option_setting';
+  if (set.includes('Name') && set.includes('Value')) return 'name_value_ref';
+  return null;
+}
+
+function parseGpoHtml(htmlText){
+  const doc = new DOMParser().parseFromString(htmlText, 'text/html');
+  const crumbs = ['','','','',''];
+  const rows = [];
+
+  const nodes = doc.querySelectorAll('div, table');
+  nodes.forEach(node=>{
+    if (node.tagName === 'DIV'){
+      for (const cls of node.classList){
+        const m = cls.match(HEAD_RE);
+        if (m){
+          const lvl = parseInt(m[1],10);
+          crumbs[lvl] = node.textContent.trim().split('\n')[0].slice(0,140);
+          for (let i=lvl+1;i<5;i++) crumbs[i]='';
+          break;
+        }
+      }
+    } else if (node.tagName === 'TABLE'){
+      const headerRow = node.querySelector('tr');
+      if (!headerRow) return;
+      const ths = Array.from(headerRow.querySelectorAll('th')).map(th=>th.textContent.trim());
+      const kind = classifyHeader(ths);
+      if (!kind) return;
+
+      Array.from(node.querySelectorAll('tr')).slice(1).forEach(tr=>{
+        const tds = Array.from(tr.querySelectorAll('td')).map(td=>td.textContent.trim());
+        if (tds.length < 2) return;
+        let subPolicy='', settingVal='', evidence='';
+        if (kind === 'policy_setting_winning'){ subPolicy=tds[0]; settingVal=tds[1]; evidence=tds[2]||''; }
+        else if (kind === 'option_setting'){ subPolicy=tds[0]; settingVal=tds[1]; evidence=''; }
+        else if (kind === 'name_value_ref'){ subPolicy=tds[0]; settingVal=tds[1]; evidence=tds[2]||''; }
+
+        if (!subPolicy || !settingVal) return;
+
+        const sectionPath = crumbs[3] || crumbs[2] || crumbs[1];
+        const subheading = crumbs[4];
+        let policyName = sectionPath.split('/').pop().trim();
+        if (subheading) policyName += ' \u2013 ' + subheading;
+        rows.push({ policyName, subPolicy, settingVal, evidence });
+      });
+    }
+  });
+  return rows;
+}
+
+/* ---------------- App state ---------------- */
+let records = []; // {srNo, component, policyName, subPolicy, settingVal, compliance, remark, evidence, groupFirst, groupSize}
+let currentFilter = 'All';
+let currentSearch = '';
+let uploadedFile = null;
+
+const el = id => document.getElementById(id);
+
+/* ---------------- File handling ---------------- */
+const dropzone = el('dropzone');
+const fileInput = el('fileInput');
+const parseBtn = el('parseBtn');
+const statusMsg = el('statusMsg');
+
+dropzone.addEventListener('click', ()=> fileInput.click());
+dropzone.addEventListener('dragover', e=>{ e.preventDefault(); dropzone.classList.add('drag'); });
+dropzone.addEventListener('dragleave', ()=> dropzone.classList.remove('drag'));
+dropzone.addEventListener('drop', e=>{
+  e.preventDefault(); dropzone.classList.remove('drag');
+  if (e.dataTransfer.files.length) handleFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', e=>{
+  if (e.target.files.length) handleFile(e.target.files[0]);
+});
+
+function handleFile(file){
+  uploadedFile = file;
+  dropzone.classList.add('has-file');
+  el('fileChipWrap').innerHTML = `<div class="file-chip">📄 ${file.name} — ${(file.size/1024).toFixed(0)} KB</div>`;
+  parseBtn.disabled = false;
+  statusMsg.textContent = '';
+  statusMsg.className = 'status-msg';
+}
+
+parseBtn.addEventListener('click', ()=>{
+  if (!uploadedFile) return;
+  statusMsg.textContent = 'Reading file…';
+  statusMsg.className = 'status-msg';
+  const reader = new FileReader();
+  reader.onload = e=>{
+    try{
+      let text = e.target.result;
+      const parsed = parseGpoHtml(text);
+      if (!parsed.length){
+        statusMsg.textContent = 'No recognizable GPO policy tables were found in this file. Make sure it is an unmodified Get-GPOReport HTML export.';
+        statusMsg.className = 'status-msg err';
+        return;
+      }
+      buildRecords(parsed);
+      renderResults();
+      el('resultsSection').style.display = 'block';
+      statusMsg.textContent = `Parsed ${parsed.length} settings successfully.`;
+      statusMsg.className = 'status-msg ok';
+      try{
+        el('resultsSection').scrollIntoView({behavior:'smooth', block:'start'});
+      }catch(scrollErr){ /* non-critical */ }
+    }catch(err){
+      console.error(err);
+      statusMsg.textContent = 'Could not parse this file: ' + err.message;
+      statusMsg.className = 'status-msg err';
+    }
+  };
+  reader.onerror = ()=>{
+    statusMsg.textContent = 'Could not read the file (encoding issue). Try re-saving it as UTF-8 HTML.';
+    statusMsg.className = 'status-msg err';
+  };
+  // Detect UTF-16 exports (common for Get-GPOReport) vs UTF-8
+  const blobHead = uploadedFile.slice(0, 4);
+  const headReader = new FileReader();
+  headReader.onload = ()=>{
+    const bytes = new Uint8Array(headReader.result);
+    const isUtf16LE = bytes[0] === 0xFF && bytes[1] === 0xFE;
+    const isUtf16BE = bytes[0] === 0xFE && bytes[1] === 0xFF;
+    if (isUtf16LE || isUtf16BE){
+      reader.readAsText(uploadedFile, isUtf16LE ? 'utf-16le' : 'utf-16be');
+    } else {
+      reader.readAsText(uploadedFile, 'utf-8');
+    }
+  };
+  headReader.readAsArrayBuffer(blobHead);
+});
+
+/* ---------------- Build records from parsed rows ---------------- */
+function buildRecords(parsedRows){
+  const groups = new Map(); // policyName -> array of rows
+  parsedRows.forEach(r=>{
+    if (!groups.has(r.policyName)) groups.set(r.policyName, []);
+    groups.get(r.policyName).push(r);
+  });
+
+  records = [];
+  let sr = 1;
+  groups.forEach((rows, policyName)=>{
+    rows.forEach((r, idx)=>{
+      const evalResult = evaluateRule(r.subPolicy, r.settingVal);
+      records.push({
+        id: `r${sr}_${idx}_${Math.random().toString(36).slice(2,7)}`,
+        srNo: sr,
+        component: 'AD',
+        policyName,
+        subPolicy: r.subPolicy,
+        settingVal: r.settingVal,
+        compliance: evalResult.status,
+        remark: evalResult.remark,
+        evidence: r.evidence || '\u2014',
+        groupFirst: idx === 0,
+        groupSize: rows.length
+      });
+    });
+    sr++;
+  });
+}
+
+/* ---------------- Rendering ---------------- */
+function statusClass(status){
+  if (status === 'Pass') return 'Pass';
+  if (status === 'Fail') return 'Fail';
+  return 'Manual-Review';
+}
+
+function renderResults(){
+  const body = el('resultsBody');
+  body.innerHTML = '';
+
+  const filtered = records.filter(r=>{
+    if (currentFilter !== 'All' && r.compliance !== currentFilter) return false;
+    if (currentSearch){
+      const hay = (r.policyName+' '+r.subPolicy+' '+r.settingVal).toLowerCase();
+      if (!hay.includes(currentSearch)) return false;
+    }
+    return true;
+  });
+
+  // recompute visible grouping (rowspans only make sense when unfiltered / All)
+  const showGroups = currentFilter === 'All' && !currentSearch;
+
+  filtered.forEach(r=>{
+    const tr = document.createElement('tr');
+    tr.dataset.id = r.id;
+
+    const showGroupCells = !showGroups || r.groupFirst;
+    const rowspanAttr = (showGroups && r.groupFirst) ? ` rowspan="${r.groupSize}"` : '';
+
+    let cells = '';
+    if (showGroupCells){
+      cells += `<td class="mono"${rowspanAttr}>${r.srNo}</td>`;
+      cells += `<td${rowspanAttr}>${r.component}</td>`;
+      cells += `<td${rowspanAttr} style="font-weight:600;">${escapeHtml(r.policyName)}</td>`;
+    }
+    cells += `<td contenteditable="true" data-field="subPolicy">${escapeHtml(r.subPolicy)}</td>`;
+    cells += `<td class="mono" contenteditable="true" data-field="settingVal">${escapeHtml(r.settingVal)}</td>`;
+    cells += `<td>${renderComplianceSelect(r)}</td>`;
+    cells += `<td contenteditable="true" data-field="remark">${escapeHtml(r.remark)}</td>`;
+    cells += `<td class="mono" contenteditable="true" data-field="evidence">${escapeHtml(r.evidence)}</td>`;
+
+    tr.innerHTML = cells;
+    body.appendChild(tr);
+  });
+
+  // wire up editable cells
+  body.querySelectorAll('td[contenteditable="true"]').forEach(td=>{
+    td.addEventListener('blur', onCellEdit);
+  });
+  body.querySelectorAll('select.compliance-select').forEach(sel=>{
+    sel.addEventListener('change', onComplianceChange);
+  });
+
+  updateStats();
+}
+
+function renderComplianceSelect(r){
+  const cls = statusClass(r.compliance);
+  const opts = ['Pass','Fail','Manual Review'].map(o=>{
+    const sel = o === r.compliance ? 'selected' : '';
+    return `<option value="${o}" ${sel}>${o}</option>`;
+  }).join('');
+  return `<select class="compliance-select ${cls}">${opts}</select>`;
+}
+
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str == null ? '' : String(str);
+  return d.innerHTML;
+}
+
+function onCellEdit(e){
+  const td = e.target;
+  const tr = td.closest('tr');
+  const rec = records.find(r=>r.id === tr.dataset.id);
+  if (!rec) return;
+  const field = td.dataset.field;
+  rec[field] = td.textContent.trim();
+}
+
+function onComplianceChange(e){
+  const sel = e.target;
+  const tr = sel.closest('tr');
+  const rec = records.find(r=>r.id === tr.dataset.id);
+  if (!rec) return;
+  rec.compliance = sel.value;
+  sel.className = 'compliance-select ' + statusClass(sel.value);
+  updateStats();
+}
+
+function updateStats(){
+  const total = records.length;
+  const pass = records.filter(r=>r.compliance==='Pass').length;
+  const fail = records.filter(r=>r.compliance==='Fail').length;
+  const manual = records.filter(r=>r.compliance==='Manual Review').length;
+
+  el('statTotal').textContent = total;
+  el('statPass').textContent = pass;
+  el('statFail').textContent = fail;
+  el('statManual').textContent = manual;
+
+  const scored = pass + fail;
+  const pct = scored ? Math.round((pass/scored)*100) : 0;
+  el('shieldPctNum').textContent = total ? pct + '%' : '\u2014';
+
+  const postureLine = el('postureLine');
+  if (!total){ postureLine.textContent = '\u2014'; }
+  else if (fail === 0){ postureLine.textContent = `All benchmarked checks passing (${manual} awaiting manual review)`; }
+  else { postureLine.textContent = `${fail} setting${fail===1?'':'s'} need remediation`; }
+
+  const arc = document.getElementById('shieldArc');
+  const perimeterApprox = 400;
+  const dash = total ? (pct/100)*perimeterApprox : 0;
+  arc.setAttribute('stroke-dasharray', `${dash} ${perimeterApprox}`);
+  arc.setAttribute('stroke', pct >= 80 ? '#34D399' : pct >= 50 ? '#FBBF24' : '#FB7185');
+}
+
+/* ---------------- Filters / search ---------------- */
+el('filterPills').addEventListener('click', e=>{
+  const pill = e.target.closest('.pill');
+  if (!pill) return;
+  document.querySelectorAll('#filterPills .pill').forEach(p=>p.classList.remove('active'));
+  pill.classList.add('active');
+  currentFilter = pill.dataset.filter;
+  renderResults();
+});
+
+el('searchBox').addEventListener('input', e=>{
+  currentSearch = e.target.value.trim().toLowerCase();
+  renderResults();
+});
+
+el('resetBtn').addEventListener('click', ()=>{
+  if (!confirm('Start over? Your current review will be cleared.')) return;
+  records = [];
+  uploadedFile = null;
+  fileInput.value = '';
+  dropzone.classList.remove('has-file');
+  el('fileChipWrap').innerHTML = '';
+  parseBtn.disabled = true;
+  statusMsg.textContent = '';
+  el('resultsSection').style.display = 'none';
+  window.scrollTo({top:0, behavior:'smooth'});
+});
+
+/* ---------------- Metadata helpers ---------------- */
+function getMeta(){
+  return {
+    clientName: el('clientName').value.trim() || 'Client Name Not Provided',
+    reviewedBy: el('reviewedBy').value.trim() || '\u2014',
+    createdBy: el('createdBy').value.trim() || '\u2014',
+    reportDate: el('reportDate').value || new Date().toISOString().slice(0,10)
+  };
+}
+
+// default date = today
+el('reportDate').value = new Date().toISOString().slice(0,10);
+
+/* ---------------- EXPORT: Excel ---------------- */
+el('exportExcelBtn').addEventListener('click', async ()=>{
+  if (!records.length) return;
+  const meta = getMeta();
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('AD Hardening');
+
+  ws.columns = [
+    {width:8},{width:11},{width:24},{width:34},{width:26},{width:14},{width:30},{width:34}
+  ];
+
+  const PURPLE = 'FF5B21B6';
+  const GOLD = 'FFD4AF37';
+  const HEADER_FILL = 'FF241C3D';
+  const PASS_FILL = 'FFDCFCE7';
+  const FAIL_FILL = 'FFFEE2E2';
+  const MANUAL_FILL = 'FFFEF3C7';
+
+  ws.mergeCells('A1:H1');
+  const titleCell = ws.getCell('A1');
+  titleCell.value = `${meta.clientName} \u2014 AD Hardening Report`;
+  titleCell.font = { name:'Calibri', size:18, bold:true, color:{argb:'FFFFFFFF'} };
+  titleCell.alignment = { horizontal:'center', vertical:'middle' };
+  titleCell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:PURPLE} };
+  ws.getRow(1).height = 30;
+
+  ws.mergeCells('A2:B2'); ws.getCell('A2').value = 'Client Name';
+  ws.mergeCells('C2:D2'); ws.getCell('C2').value = meta.clientName;
+  ws.mergeCells('E2:F2'); ws.getCell('E2').value = 'Reviewed By';
+  ws.mergeCells('G2:H2'); ws.getCell('G2').value = meta.reviewedBy;
+  ws.mergeCells('A3:B3'); ws.getCell('A3').value = 'Created By';
+  ws.mergeCells('C3:D3'); ws.getCell('C3').value = meta.createdBy;
+  ws.mergeCells('E3:F3'); ws.getCell('E3').value = 'Date';
+  ws.mergeCells('G3:H3'); ws.getCell('G3').value = meta.reportDate;
+
+  [2,3].forEach(rn=>{
+    ws.getRow(rn).eachCell(cell=>{
+      cell.font = { name:'Calibri', size:11, bold: (cell.address[0]==='A'||cell.address[0]==='E') };
+      cell.alignment = { vertical:'middle' };
+    });
+  });
+
+  const headerRowIdx = 5;
+  const headers = ['SR. No','Component','Policy Name','Sub Policy Name','Settings','Compliance','Remark If Failed','Evidence'];
+  const headerRow = ws.getRow(headerRowIdx);
+  headers.forEach((h,i)=>{
+    const cell = headerRow.getCell(i+1);
+    cell.value = h;
+    cell.font = { name:'Calibri', size:11, bold:true };
+    cell.alignment = { horizontal:'center', vertical:'middle', wrapText:true };
+    cell.fill = { type:'pattern', pattern:'solid', fgColor:{argb:'FFD9CCF2'} };
+    cell.border = { top:{style:'thin'}, bottom:{style:'thin'}, left:{style:'thin'}, right:{style:'thin'} };
+  });
+  headerRow.height = 20;
+
+  let rowPtr = headerRowIdx + 1;
+  let groupStartRow = rowPtr;
+
+  records.forEach((r)=>{
+    const row = ws.getRow(rowPtr);
+    const complianceFill = r.compliance === 'Pass' ? PASS_FILL : r.compliance === 'Fail' ? FAIL_FILL : MANUAL_FILL;
+    const complianceColor = r.compliance === 'Pass' ? 'FF15803D' : r.compliance === 'Fail' ? 'FFB91C1C' : 'FF92600A';
+
+    if (r.groupFirst) groupStartRow = rowPtr;
+
+    row.getCell(1).value = r.srNo;
+    row.getCell(2).value = r.component;
+    row.getCell(3).value = r.policyName;
+    row.getCell(4).value = r.subPolicy;
+    row.getCell(5).value = r.settingVal;
+    row.getCell(6).value = r.compliance;
+    row.getCell(7).value = r.remark;
+    row.getCell(8).value = r.evidence;
+
+    for (let c=1;c<=8;c++){
+      const cell = row.getCell(c);
+      cell.border = { top:{style:'thin'}, bottom:{style:'thin'}, left:{style:'thin'}, right:{style:'thin'} };
+      cell.alignment = { vertical:'middle', wrapText:true, horizontal: (c===1||c===2||c===6)?'center':'left' };
+      cell.font = { name:'Calibri', size:11 };
+    }
+    row.getCell(6).fill = { type:'pattern', pattern:'solid', fgColor:{argb:complianceFill} };
+    row.getCell(6).font = { name:'Calibri', size:11, bold:true, color:{argb:complianceColor} };
+
+    const isGroupLast = (rowPtr - groupStartRow + 1) === r.groupSize;
+    if (isGroupLast && r.groupSize > 1){
+      const endRow = rowPtr;
+      ws.mergeCells(`A${groupStartRow}:A${endRow}`);
+      ws.mergeCells(`B${groupStartRow}:B${endRow}`);
+      ws.mergeCells(`C${groupStartRow}:C${endRow}`);
+    }
+
+    rowPtr++;
+  });
+
+  const buf = await wb.xlsx.writeBuffer();
+  saveAs(new Blob([buf], {type:'application/octet-stream'}), sanitizeFilename(meta.clientName) + '_AD_Hardening_Report.xlsx');
+});
+
+/* ---------------- EXPORT: Word ---------------- */
+el('exportWordBtn').addEventListener('click', async ()=>{
+  if (!records.length) return;
+  const meta = getMeta();
+  const { Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell, WidthType,
+          HeadingLevel, AlignmentType, ShadingType, VerticalAlign, BorderStyle } = docx;
+
+  function metaRow(label, value){
+    return new TableRow({ children:[
+      new TableCell({ width:{size:22,type:WidthType.PERCENTAGE}, shading:{fill:'241C3D'}, children:[
+        new Paragraph({ children:[new TextRun({text:label, bold:true, color:'FFFFFF', size:20})] })
+      ]}),
+      new TableCell({ width:{size:28,type:WidthType.PERCENTAGE}, children:[
+        new Paragraph({ children:[new TextRun({text:value, size:20})] })
+      ]})
+    ]});
+  }
+
+  const metaTable = new Table({
+    width: {size:100, type:WidthType.PERCENTAGE},
+    rows: [
+      new TableRow({ children:[
+        ...metaRow('Client Name', meta.clientName).children,
+        ...metaRow('Reviewed By', meta.reviewedBy).children
+      ]}),
+      new TableRow({ children:[
+        ...metaRow('Created By', meta.createdBy).children,
+        ...metaRow('Date', meta.reportDate).children
+      ]})
+    ]
+  });
+
+  const headerCells = ['SR','Component','Policy Name','Sub Policy Name','Settings','Compliance','Remark If Failed','Evidence'].map(h=>
+    new TableCell({
+      shading:{fill:'5B21B6'},
+      verticalAlign: VerticalAlign.CENTER,
+      children:[ new Paragraph({ alignment:AlignmentType.CENTER, children:[new TextRun({text:h, bold:true, color:'FFFFFF', size:18})] }) ]
+    })
+  );
+  const headerRow = new TableRow({ children: headerCells, tableHeader:true });
+
+  const dataRows = records.map(r=>{
+    const complianceFill = r.compliance === 'Pass' ? 'DCFCE7' : r.compliance === 'Fail' ? 'FEE2E2' : 'FEF3C7';
+    const complianceColor = r.compliance === 'Pass' ? '15803D' : r.compliance === 'Fail' ? 'B91C1C' : '92600A';
+    const cell = (text, opts={}) => new TableCell({
+      shading: opts.fill ? {fill:opts.fill} : undefined,
+      children:[ new Paragraph({ children:[ new TextRun({ text:String(text), size:18, bold: !!opts.bold, color: opts.color }) ] }) ]
+    });
+    return new TableRow({ children:[
+      cell(r.srNo), cell(r.component), cell(r.policyName, {bold:true}), cell(r.subPolicy),
+      cell(r.settingVal), cell(r.compliance, {fill:complianceFill, bold:true, color:complianceColor}),
+      cell(r.remark), cell(r.evidence)
+    ]});
+  });
+
+  const dataTable = new Table({
+    width:{size:100, type:WidthType.PERCENTAGE},
+    rows:[headerRow, ...dataRows]
+  });
+
+  const doc = new Document({
+    sections: [{
+      properties:{},
+      children:[
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing:{after:200},
+          children:[ new TextRun({ text: `${meta.clientName} \u2014 AD Hardening Report`, bold:true, size:34, color:'5B21B6' }) ]
+        }),
+        metaTable,
+        new Paragraph({ text:'', spacing:{after:200} }),
+        dataTable
+      ]
+    }]
+  });
+
+  const blob = await Packer.toBlob(doc);
+  saveAs(blob, sanitizeFilename(meta.clientName) + '_AD_Hardening_Report.docx');
+});
+
+/* ---------------- EXPORT: PDF ---------------- */
+el('exportPdfBtn').addEventListener('click', ()=>{
+  if (!records.length) return;
+  const meta = getMeta();
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'landscape', unit:'pt', format:'a4' });
+
+  doc.setFontSize(16);
+  doc.setTextColor(91,33,182);
+  doc.text(`${meta.clientName} \u2014 AD Hardening Report`, 40, 40);
+
+  doc.setFontSize(10);
+  doc.setTextColor(60,60,60);
+  doc.text(`Client Name: ${meta.clientName}`, 40, 60);
+  doc.text(`Reviewed By: ${meta.reviewedBy}`, 300, 60);
+  doc.text(`Created By: ${meta.createdBy}`, 40, 75);
+  doc.text(`Date: ${meta.reportDate}`, 300, 75);
+
+  const body = records.map(r=>[r.srNo, r.component, r.policyName, r.subPolicy, r.settingVal, r.compliance, r.remark, r.evidence]);
+
+  doc.autoTable({
+    startY: 92,
+    head: [['SR','Component','Policy Name','Sub Policy Name','Settings','Compliance','Remark If Failed','Evidence']],
+    body,
+    styles:{ fontSize:8, cellPadding:4, valign:'middle' },
+    headStyles:{ fillColor:[91,33,182], textColor:255, fontStyle:'bold' },
+    columnStyles:{ 0:{cellWidth:26}, 1:{cellWidth:50}, 5:{cellWidth:55} },
+    didParseCell: function(data){
+      if (data.section === 'body' && data.column.index === 5){
+        const val = data.cell.raw;
+        if (val === 'Pass'){ data.cell.styles.fillColor = [220,252,231]; data.cell.styles.textColor = [21,128,61]; data.cell.styles.fontStyle='bold'; }
+        else if (val === 'Fail'){ data.cell.styles.fillColor = [254,226,226]; data.cell.styles.textColor = [185,28,28]; data.cell.styles.fontStyle='bold'; }
+        else { data.cell.styles.fillColor = [254,243,199]; data.cell.styles.textColor = [146,96,10]; data.cell.styles.fontStyle='bold'; }
+      }
+    }
+  });
+
+  doc.save(sanitizeFilename(meta.clientName) + '_AD_Hardening_Report.pdf');
+});
+
+function sanitizeFilename(name){
+  return name.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g,'').slice(0,60) || 'Client';
+}
+
+})();
+</script>
+</body>
+</html>
